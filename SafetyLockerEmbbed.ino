@@ -15,33 +15,38 @@
 
 #include <WiFiClient.h>
 
+#include <WiFiClientSecureBearSSL.h>
+// Fingerprint for demo URL, expires on June 2, 2021, needs to be updated well before this date
+const uint8_t fingerprint[20] = { 0x40, 0xaf, 0x00, 0x6b, 0xec, 0x90, 0x22, 0x41, 0x8e, 0xa3, 0xad, 0xfa, 0x1a, 0xe8, 0x25, 0x41, 0x1d, 0x1a, 0x54, 0xb3 };
+
+
 ESP8266WiFiMulti WiFiMulti;
 
-const char* ssid = "perfectoGroup"; //change this with the name of your wifi
-const char* password = "perfecto2022"; //change this with the wifi password
+const char* ssid = "perfectoGroup";     //change this with the name of your wifi
+const char* password = "perfecto2022";  //change this with the wifi password
 
 void setup() {
 
   Serial.begin(115200);
   // Serial.setDebugOutput(true);
 
-  pinMode(D2,OUTPUT);
-  pinMode(D4,OUTPUT);
-  pinMode(D0,OUTPUT);
-  
-  pinMode(D5,OUTPUT);
-  pinMode(D6,OUTPUT);
-  pinMode(D7,OUTPUT);
-  pinMode(D1,OUTPUT);
+  pinMode(D2, OUTPUT);
+  pinMode(D4, OUTPUT);
+  pinMode(D0, OUTPUT);
 
-  digitalWrite(D2,LOW);
-  digitalWrite(D4,LOW);
-  digitalWrite(D0,LOW);
-  
-  digitalWrite(D5,HIGH); //relays have logic inverted
-  digitalWrite(D6,HIGH);
-  digitalWrite(D7,HIGH);
-  digitalWrite(D1,HIGH);
+  pinMode(D5, OUTPUT);
+  pinMode(D6, OUTPUT);
+  pinMode(D7, OUTPUT);
+  pinMode(D1, OUTPUT);
+
+  digitalWrite(D2, LOW);
+  digitalWrite(D4, LOW);
+  digitalWrite(D0, LOW);
+
+  digitalWrite(D5, HIGH);  //relays have logic inverted
+  digitalWrite(D6, HIGH);
+  digitalWrite(D7, HIGH);
+  digitalWrite(D1, HIGH);
 
 
   Serial.println();
@@ -56,23 +61,22 @@ void setup() {
 
   WiFi.mode(WIFI_STA);
   WiFiMulti.addAP(ssid, password);
-
 }
 
 void loop() {
   // wait for WiFi connection
   if ((WiFiMulti.run() == WL_CONNECTED)) {
+    WiFiClientSecure client;
+    client.setInsecure();
 
-    WiFiClient client;
-
-    HTTPClient http;
+    HTTPClient https;
 
     Serial.print("[HTTP] begin...\n");
-    if (http.begin(client, "http://safetylocker.fly.dev/api/iot/sync")) {  // HTTP
+    if (https.begin(client, "https://safetylocker.fly.dev/api/iot/sync/")) {  // HTTP
 
       Serial.print("[HTTP] GET...\n");
       // start connection and send HTTP header
-      int httpCode = http.GET();
+      int httpCode = https.GET();
 
       // httpCode will be negative on error
       if (httpCode > 0) {
@@ -80,10 +84,10 @@ void loop() {
         Serial.printf("[HTTP] GET... code: %d\n", httpCode);
 
         // file found at server
-        if (httpCode == HTTP_CODE_OK || httpCode == HTTP_CODE_MOVED_PERMANENTLY) {
-          String input = http.getString();
+        if (httpCode == HTTP_CODE_OK) {
+          String input = https.getString();
           size_t inputLength;
-          Serial.println(input);
+          //Serial.println(input);
           StaticJsonDocument<256> doc;
           DeserializationError error = deserializeJson(doc, input);
 
@@ -94,28 +98,28 @@ void loop() {
           }
 
           for (JsonObject item : doc.as<JsonArray>()) {
-            int state = item["state"].as<int>(); // 1, 1, 1, 1
-            String connected_pin = item["connected_pin"].as<String>(); // "D5", "D6", "D7", "D1"
-            if(connected_pin == "D5") digitalWrite(D5,!state);
-            if(connected_pin == "D6") digitalWrite(D6,!state);
-            if(connected_pin == "D7") digitalWrite(D7,!state);
-            if(connected_pin == "D1") digitalWrite(D1,!state);
-            Serial.print(String(!state)+" state written to the line ");
-            Serial.println("connected on "+connected_pin);
+            int state = item["state"].as<int>();                        // 1, 1, 1, 1
+            String connected_pin = item["connected_pin"].as<String>();  // "D5", "D6", "D7", "D1"
+            if (connected_pin == "D5") digitalWrite(D5, !state);
+            if (connected_pin == "D6") digitalWrite(D6, !state);
+            if (connected_pin == "D7") digitalWrite(D7, !state);
+            if (connected_pin == "D1") digitalWrite(D1, !state);
+            Serial.print(String(!state) + " state written to the line ");
+            Serial.println("connected on " + connected_pin);
           }
-          digitalWrite(D2,!digitalRead(D5)); //update the LED state
-          digitalWrite(D4,!digitalRead(D6));
-          digitalWrite(D0,!digitalRead(D7));
+          digitalWrite(D2, !digitalRead(D5));  //update the LED state
+          digitalWrite(D4, !digitalRead(D6));
+          digitalWrite(D0, !digitalRead(D7));
         }
       } else {
-        Serial.printf("[HTTP] GET... failed, error: %s\n", http.errorToString(httpCode).c_str());
+        Serial.printf("[HTTP] GET... failed, error: %s\n", https.errorToString(httpCode).c_str());
       }
 
-      http.end();
+      https.end();
     } else {
       Serial.printf("[HTTP} Unable to connect\n");
     }
   }
 
-  delay(5000); //we will request to update every 5seconds
+  delay(8000);  //we will request to update every 8seconds
 }
