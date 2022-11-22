@@ -41,7 +41,7 @@ void setup() {
 
   digitalWrite(D2, LOW);
   digitalWrite(D4, LOW);
-  digitalWrite(D0, LOW);
+  digitalWrite(D0, HIGH); //power led
 
   digitalWrite(D5, HIGH);  //relays have logic inverted
   digitalWrite(D6, HIGH);
@@ -62,7 +62,7 @@ void setup() {
   WiFi.mode(WIFI_STA);
   WiFiMulti.addAP(ssid, password);
 }
-
+int current_status_running = -1; // -1 for unkown , 0 running and 1 in maintance
 void loop() {
   // wait for WiFi connection
   if ((WiFiMulti.run() == WL_CONNECTED)) {
@@ -88,7 +88,7 @@ void loop() {
           String input = https.getString();
           size_t inputLength;
           //Serial.println(input);
-          StaticJsonDocument<256> doc;
+          StaticJsonDocument<400> doc;
           DeserializationError error = deserializeJson(doc, input);
 
           if (error) {
@@ -99,17 +99,25 @@ void loop() {
 
           for (JsonObject item : doc.as<JsonArray>()) {
             int state = item["state"].as<int>();                        // 1, 1, 1, 1
-            String connected_pin = item["connected_pin"].as<String>();  // "D5", "D6", "D7", "D1"
+            String connected_pin = item["connected_pin"].as<String>();  // "D5", "D6", "D7", "D1",Gl
+
             if (connected_pin == "D5") digitalWrite(D5, !state);
             if (connected_pin == "D6") digitalWrite(D6, !state);
             if (connected_pin == "D7") digitalWrite(D7, !state);
             if (connected_pin == "D1") digitalWrite(D1, !state);
+            if (connected_pin == "Gl") current_status_running = state;
+
             Serial.print(String(!state) + " state written to the line ");
             Serial.println("connected on " + connected_pin);
           }
-          digitalWrite(D2, !digitalRead(D5));  //update the LED state
-          digitalWrite(D4, !digitalRead(D6));
-          digitalWrite(D0, !digitalRead(D7));
+          if(current_status_running){
+            digitalWrite(D2, LOW);  //update the LED state
+            digitalWrite(D4, HIGH);
+          }
+          else{
+            digitalWrite(D2, HIGH);  //update the LED state
+            digitalWrite(D4, LOW);
+          }
         }
       } else {
         Serial.printf("[HTTP] GET... failed, error: %s\n", https.errorToString(httpCode).c_str());
@@ -120,6 +128,23 @@ void loop() {
       Serial.printf("[HTTP} Unable to connect\n");
     }
   }
+  if(current_status_running==0){ //in maintance
+    for(int i=0;i<4;i++){
+      digitalWrite(D2, LOW);  //update the LED state
+      digitalWrite(D4, LOW);
 
-  delay(8000);  //we will request to update every 8seconds
+      delay(1000);
+
+      digitalWrite(D2, HIGH);  //update the LED state
+      digitalWrite(D4, LOW);
+
+      delay(1000);
+    }
+  }
+
+  if(current_status_running==1){
+    digitalWrite(D2, LOW);  //update the LED state
+    digitalWrite(D4, HIGH);
+    delay(8000); //we will request to update every 8seconds
+  }
 }
